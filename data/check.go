@@ -19,24 +19,17 @@ func main() {
 		log.Fatalln(err)
 	}
 	//Convert the body to type string
-	sb := string(body)
 	fmt.Printf("t1: %T\n", body)
+	writeFile(body)
 }
 
-func create() {
-	f, err := os.Create("data.txt")
-
+func writeFile(s []byte) string {
+	f, err := os.Create("online.csv")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
-
 	defer f.Close()
 
-	_, err2 := f.WriteString("old falcon\n")
-
-	if err2 != nil {
-		log.Fatal(err2)
-	}
-
-	fmt.Println("done")
+	f.Write(s)
+	return ""
 }

@@ -5,8 +5,12 @@ package main
 
 import (
 	"encoding/csv"
+	"encoding/hex"
 	"fmt"
+	"hash/fnv"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"reflect"
 	"sort"
@@ -70,9 +74,20 @@ func runCSVJobs(url string, ch chan [][]string, startTime time.Time, wg *sync.Wa
 	var sortedCSV [][]string
 	isValid := validateURL(url, startTime)
 	var filePath string
-	if isValid == 1 {
-		filePath = strings.Trim(url, "file://")
-		csv, check := readCSVFile(filePath, startTime)
+	var csv [][]string
+	var check bool
+	if isValid > 0 {
+		if isValid == 1 {
+			filePath = strings.Trim(url, "file://")
+			csv, check = readCSVFile(filePath, startTime)
+		} else if isValid == 2 {
+			// create file name through hashed startTime
+			filePath = "download1.csv"
+			// download CSV
+			downloadCSV(url, filePath)
+			csv, check = readCSVFile(filePath, startTime)
+			deleteCSV(filePath)
+		}
 		if check == true {
 			cleanedCSV := cleanCSV(csv, startTime, filePath)
 			sortedCSV = sortCSV(cleanedCSV, startTime, filePath)
@@ -83,6 +98,15 @@ func runCSVJobs(url string, ch chan [][]string, startTime time.Time, wg *sync.Wa
 		sortedCSV = [][]string{{"fname", "lname", "age"}}
 	}
 	ch <- sortedCSV
+}
+
+func hashTime(filePath string) string {
+	h := fnv.New64a()
+
+	// Hash of Timestamp rounded to previous hour
+	h.Write([]byte(time.Now().Round(time.Hour).Add(-1 * time.Hour).String()))
+	h.Write([]byte(filePath))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // input CSV is valid
@@ -130,6 +154,44 @@ func validateURL(filePath string, startTime time.Time) int {
 		fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "File is not properly formatted under file ext. 'file://'")
 		return 0
 	}
+}
+
+func deleteCSV(fileName string) {
+	e := os.Remove(fileName)
+	if e != nil {
+		log.Fatal(e)
+	}
+}
+
+func downloadCSV(url string, fileName string) bool {
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	// We Read the response body on the line below.
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	//Convert the body to type string
+	written := writeFile(body, fileName)
+	if written == true {
+		return true
+	} else {
+		return false
+	}
+}
+
+func writeFile(data []byte, fileName string) bool {
+	f, err := os.Create(fileName)
+	if err != nil {
+		fmt.Printf("%s", err)
+		return false
+	}
+	defer f.Close()
+
+	f.Write(data)
+	return true
 }
 
 // Returns a CSV with cells with missing items removed
