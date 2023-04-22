@@ -21,6 +21,12 @@ import (
 )
 
 func main() {
+	// Deletes CSV directory
+	os_err := os.RemoveAll("csv_tmp")
+	if os_err != nil {
+		fmt.Println(os_err)
+	}
+
 	var wg sync.WaitGroup
 	var CSVs [][][]string
 	ch := make(chan [][]string)
@@ -35,6 +41,11 @@ func main() {
 
 	// Creating directory to temporarily store downloaded CSVs
 	if err := os.Mkdir("csv_tmp", os.ModePerm); err != nil {
+		// Deletes CSV directory
+		err := os.RemoveAll("csv_tmp")
+		if err != nil {
+			log.Fatal(err)
+		}
 		log.Fatal(err)
 	}
 
@@ -44,6 +55,7 @@ func main() {
 		go runCSVJobs(URLS[i], ch, startTime, &wg)
 	}
 
+	wg.Wait()
 	for i := 0; i < len(URLS); i++ {
 		CSVs = append(CSVs, <-ch)
 	}
@@ -77,12 +89,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 }
 
 // Runs the set of functions to clean and sort a CSV
 func runCSVJobs(url string, ch chan [][]string, startTime time.Time, wg *sync.WaitGroup) {
-	defer wg.Done()
 	var sortedCSV [][]string
 	isValid := validateURL(url, startTime)
 	var filePath string
@@ -94,12 +104,12 @@ func runCSVJobs(url string, ch chan [][]string, startTime time.Time, wg *sync.Wa
 			csv, check = readCSVFile(filePath, startTime)
 		} else if isValid == 2 {
 			// create file name through hashed startTime
-			filePath = "csv_tmp/" + hashFilePath(filePath)
+			filePath = "./csv_tmp/" + hashFilePath(filePath)
 			// download CSV
 			isDownloaded := downloadCSV(url, filePath, startTime)
 			if isDownloaded {
+				// find data
 				csv, check = readCSVFile(filePath, startTime)
-				deleteCSV(filePath)
 			} else {
 				sortedCSV = [][]string{{"fname", "lname", "age"}}
 			}
@@ -113,6 +123,7 @@ func runCSVJobs(url string, ch chan [][]string, startTime time.Time, wg *sync.Wa
 	} else {
 		sortedCSV = [][]string{{"fname", "lname", "age"}}
 	}
+	wg.Done()
 	ch <- sortedCSV
 }
 
@@ -123,7 +134,7 @@ func readCSVFile(filePath string, startTime time.Time) ([][]string, bool) {
 	var records [][]string
 	f, err := os.Open(filePath)
 	if err != nil {
-		fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "File cannot be read")
+		fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), err)
 	}
 	defer f.Close()
 
@@ -160,57 +171,6 @@ func validateURL(filePath string, startTime time.Time) int {
 		// ex. download data from online database using the package net/http into ./data/[FILE]
 		fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "File is not properly formatted under file ext. 'file://'")
 		return 0
-	}
-}
-
-// downloads CSV over http
-func downloadCSV(url string, filePath string, startTime time.Time) bool {
-	func_time := time.Now()
-	resp, err := http.Get(url)
-	if err != nil {
-		fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "File is not properly formatted under file ext. 'file://'")
-		return false
-	}
-	// We Read the response body on the line below.
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalln(err)
-		return false
-	}
-	//Convert the body to type string
-	written := writeFile(body, filePath)
-	if written == true {
-		return true
-	} else {
-		return false
-	}
-}
-
-func hashFilePath(filePath string) string {
-	h := fnv.New64a()
-	h.Write([]byte(time.Now().Round(time.Hour).Add(-1 * time.Hour).String()))
-	h.Write([]byte(filePath))
-	return hex.EncodeToString(h.Sum(nil))
-}
-
-// Writes data to file in csv_tmp directory
-func writeFile(data []byte, fileName string) bool {
-	f, err := os.Create(fileName)
-	if err != nil {
-		fmt.Printf("%s", err)
-		return false
-	}
-	defer f.Close()
-
-	f.Write(data)
-	return true
-}
-
-// deletes a CSV in csv_tmp directory
-func deleteCSV(fileName string) {
-	e := os.Remove(fileName)
-	if e != nil {
-		fmt.Printf("file doesn't exist \n")
 	}
 }
 
@@ -295,6 +255,49 @@ func printMean(csv [][]string, startTime time.Time, wg *sync.WaitGroup) {
 	}
 	mean = float64(result) / float64(len(csv))
 	fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %.2f\n", "RESULT", "MEAN", time.Since(startTime).String(), time.Since(func_time).String(), mean)
+}
+
+// downloads CSV over http
+func downloadCSV(url string, filePath string, startTime time.Time) bool {
+	func_time := time.Now()
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", url, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), err)
+		return false
+	}
+	// We Read the response body on the line below.
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalln(err)
+		return false
+	}
+	//Convert the body to type string
+	written := writeFile(body, filePath)
+	if written == true {
+		return true
+	} else {
+		return false
+	}
+}
+
+func hashFilePath(filePath string) string {
+	h := fnv.New64a()
+	h.Write([]byte(time.Now().Round(time.Hour).Add(-1 * time.Hour).String()))
+	h.Write([]byte(filePath))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// Writes data to file in csv_tmp directory
+func writeFile(data []byte, fileName string) bool {
+	f, err := os.Create(fileName)
+	if err != nil {
+		fmt.Printf("%s", err)
+		return false
+	}
+	defer f.Close()
+
+	f.Write(data)
+	return true
 }
 
 // Writes [][]string To CSV

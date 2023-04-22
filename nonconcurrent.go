@@ -1,9 +1,16 @@
 package main
 
+// add BODY -> csv file
+// open csv file
+
 import (
 	"encoding/csv"
+	"encoding/hex"
 	"fmt"
+	"hash/fnv"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"reflect"
 	"sort"
@@ -13,15 +20,25 @@ import (
 )
 
 func main() {
+	// Deletes CSV directory
+	os_err := os.RemoveAll("csv_tmp")
+	if os_err != nil {
+		fmt.Println(os_err)
+	}
 	var CSVs [][][]string
 	startTime := time.Now()
 	outFile := "data/out.csv"
 	URLS := os.Args[1:]
 
-	fmt.Printf("\n+%62s+\n", strings.Repeat("-", 75))
-	fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %s", "FILE NAME", "PROCESS", "TOTAL TIME", "PROCESS TIME", "DETAILS")
-	fmt.Printf("\n+%62s+\n", strings.Repeat("-", 75))
-	fmt.Printf("| %-25s | %-15s | %-12s | %-12s | Threads utilized: %d\n", "", "STARTING", time.Since(startTime).String(), "", len(URLS))
+	fmt.Printf("\n+%90s+\n", strings.Repeat("-", 90))
+	fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s", "FILE NAME", "PROCESS", "TOTAL TIME", "PROCESS TIME", "DETAILS")
+	fmt.Printf("\n+%90s+\n", strings.Repeat("-", 90))
+	fmt.Printf("| %-40s | %-15s | %-12s | %-12s | Threads utilized: %d\n", "", "STARTING", time.Since(startTime).String(), "", len(URLS))
+
+	// Creating directory to temporarily store downloaded CSVs
+	if err := os.Mkdir("csv_tmp", os.ModePerm); err != nil {
+		log.Fatal(err)
+	}
 
 	// Read File, Translate to CSV, Clean and Sort
 	for i := 0; i < len(URLS); i++ {
@@ -41,7 +58,7 @@ func main() {
 
 	// Finds mean and median
 	printStats(sortedCSV, startTime)
-	fmt.Printf("| %-25s | %-15s | %-12s | %-12s | \n", outFile, "FINISHED", time.Since(startTime).String(), "")
+	fmt.Printf("| %-40s | %-15s | %-12s | %-12s | \n", outFile, "FINISHED", time.Since(startTime).String(), "")
 
 	// Writes data to CSV
 	// toCSV := append([][]string{{"fname", "lname", "age"}}, sortedCSV...)
@@ -51,15 +68,34 @@ func main() {
 // Runs the set of functions to clean and sort a CSV
 func runCSVJobs(url string, startTime time.Time) [][]string {
 	var sortedCSV [][]string
-	if validateURL(url, startTime) {
-		filePath := strings.Trim(url, "file://")
-		csv, check := readCSVFile(filePath, startTime)
+	isValid := validateURL(url, startTime)
+	var filePath string
+	var csv [][]string
+	var check bool
+	if isValid > 0 {
+		if isValid == 1 {
+			filePath = strings.Trim(url, "file://")
+			csv, check = readCSVFile(filePath, startTime)
+		} else if isValid == 2 {
+			// create file name through hashed startTime
+			filePath = "csv_tmp/" + hashFilePath(filePath)
+			// download CSV
+			isDownloaded := downloadCSV(url, filePath, startTime)
+			if isDownloaded {
+				csv, check = readCSVFile(filePath, startTime)
+				deleteCSV(filePath)
+			} else {
+				sortedCSV = [][]string{{"fname", "lname", "age"}}
+			}
+		}
 		if check == true {
 			cleanedCSV := cleanCSV(csv, startTime, filePath)
 			sortedCSV = sortCSV(cleanedCSV, startTime, filePath)
 		} else {
 			sortedCSV = [][]string{{"fname", "lname", "age"}}
 		}
+	} else {
+		sortedCSV = [][]string{{"fname", "lname", "age"}}
 	}
 	return sortedCSV
 }
@@ -71,38 +107,94 @@ func readCSVFile(filePath string, startTime time.Time) ([][]string, bool) {
 	var records [][]string
 	f, err := os.Open(filePath)
 	if err != nil {
-		fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "File cannot be read")
+		fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "File cannot be read")
 	}
 	defer f.Close()
 
 	csvReader := csv.NewReader(f)
 	records, err = csvReader.ReadAll()
 	if err != nil {
-		fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), err.Error())
+		fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), err.Error())
 	} else if len(records) > 0 {
 		if reflect.DeepEqual(records[0], []string{"fname", " lname", " age"}) {
-			fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %s\n", filePath, "READING", time.Since(startTime).String(), time.Since(func_time).String(), "")
+			fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "READING", time.Since(startTime).String(), time.Since(func_time).String(), "")
 			return records, true
 		} else {
-			fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "Has the incorrect CSV headers: ["+strings.Join(records[0], ", ")+"]")
+			fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "Has the incorrect CSV headers: ["+strings.Join(records[0], ", ")+"]")
 		}
 	} else {
-		fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "File is empty")
+		fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "File is empty")
 	}
-	fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %s\n", filePath, "READING", time.Since(startTime).String(), time.Since(func_time).String(), "")
+	fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "READING", time.Since(startTime).String(), time.Since(func_time).String(), "")
 	return [][]string{{"fname", "lname", "age"}}, false
 }
 
 // Checks if URL Path is Valid by file://
-func validateURL(filePath string, startTime time.Time) bool {
+// 0: "Not valid URL"
+// 1: "file://"
+// 2: "https://"
+func validateURL(filePath string, startTime time.Time) int {
 	func_time := time.Now()
 	if strings.Contains(filePath, "file://") {
+		return 1
+	} else if strings.Contains(filePath, "http://") {
+		return 2
+	} else {
+		// do stuff for non local files (https://, ftp://, etc.)
+		// ex. download data from online database using the package net/http into ./data/[FILE]
+		fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "File is not properly formatted under file ext. 'file://'")
+		return 0
+	}
+}
+
+// downloads CSV over http
+func downloadCSV(url string, filePath string, startTime time.Time) bool {
+	func_time := time.Now()
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "File is not properly formatted under file ext. 'file://'")
+		return false
+	}
+	// We Read the response body on the line below.
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalln(err)
+		return false
+	}
+	//Convert the body to type string
+	written := writeFile(body, filePath)
+	if written == true {
 		return true
 	} else {
-		// do stuff for non local files (http:// , https:// , etc.)
-		// ex. download data from online database using the package net/http into ./data/[FILE]
-		fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %s\n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "File is not properly formatted under file ext. 'file://'")
 		return false
+	}
+}
+
+func hashFilePath(filePath string) string {
+	h := fnv.New64a()
+	h.Write([]byte(time.Now().Round(time.Hour).Add(-1 * time.Hour).String()))
+	h.Write([]byte(filePath))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// Writes data to file in csv_tmp directory
+func writeFile(data []byte, fileName string) bool {
+	f, err := os.Create(fileName)
+	if err != nil {
+		fmt.Printf("%s", err)
+		return false
+	}
+	defer f.Close()
+
+	f.Write(data)
+	return true
+}
+
+// deletes a CSV in csv_tmp directory
+func deleteCSV(fileName string) {
+	e := os.Remove(fileName)
+	if e != nil {
+		fmt.Printf("file doesn't exist \n")
 	}
 }
 
@@ -118,7 +210,7 @@ func cleanCSV(csv [][]string, startTime time.Time, filePath string) [][]string {
 			cleanedCSV = append(cleanedCSV, csv[i])
 		}
 	}
-	fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %d cell[s] removed \n", filePath, "CLEANING", time.Since(startTime).String(), time.Since(func_time).String(), len(csv)-len(cleanedCSV))
+	fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %d cell[s] removed \n", filePath, "CLEANING", time.Since(startTime).String(), time.Since(func_time).String(), len(csv)-len(cleanedCSV))
 	return cleanedCSV
 }
 
@@ -130,15 +222,15 @@ func sortCSV(csv [][]string, startTime time.Time, filePath string) [][]string {
 		age2 := strings.Trim(csv[j][2], " ")
 		firstNum, err := strconv.Atoi(age1)
 		if err != nil {
-			fmt.Printf("| %-25s | %-15s | %-12s | %-12s | \n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String())
+			fmt.Printf("| %-40s | %-15s | %-12s | %-12s | \n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String())
 		}
 		secondNum, err := strconv.Atoi(age2)
 		if err != nil {
-			fmt.Printf("| %-25s | %-15s | %-12s | %-12s | \n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String())
+			fmt.Printf("| %-40s | %-15s | %-12s | %-12s | \n", filePath, "ERROR", time.Since(startTime).String(), time.Since(func_time).String())
 		}
 		return firstNum < secondNum
 	})
-	fmt.Printf("| %-25s | %-15s | %-12s | %-12s | \n", filePath, "SORTING", time.Since(startTime).String(), time.Since(func_time).String())
+	fmt.Printf("| %-40s | %-15s | %-12s | %-12s | \n", filePath, "SORTING", time.Since(startTime).String(), time.Since(func_time).String())
 	return csv
 }
 
@@ -164,8 +256,8 @@ func printMedian(csv [][]string, startTime time.Time) {
 	} else {
 		median, _ = strconv.ParseFloat(strings.Trim(csv[l/2][2], " "), 64)
 	}
-	fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %.2f\n", "RESULT", "MEDIAN", time.Since(startTime).String(), time.Since(func_time).String(), median)
-	fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %s\n", "RESULT", "MEDIAN PERSON", time.Since(startTime).String(), time.Since(func_time).String(), medianPerson)
+	fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %.2f\n", "RESULT", "MEDIAN", time.Since(startTime).String(), time.Since(func_time).String(), median)
+	fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %s\n", "RESULT", "MEDIAN PERSON", time.Since(startTime).String(), time.Since(func_time).String(), medianPerson)
 }
 
 // Prints mean
@@ -178,12 +270,12 @@ func printMean(csv [][]string, startTime time.Time) {
 	for i := 0; i < len(csv); i++ {
 		newNum, err = strconv.Atoi(strings.Trim(csv[i][2], " "))
 		if err != nil {
-			fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %s\n", "RESULT", "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), err)
+			fmt.Printf("| %-35s | %-15s | %-12s | %-12s | %s\n", "RESULT", "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), err)
 		}
 		result += newNum
 	}
 	mean = float64(result) / float64(len(csv))
-	fmt.Printf("| %-25s | %-15s | %-12s | %-12s | %.2f\n", "RESULT", "MEAN", time.Since(startTime).String(), time.Since(func_time).String(), mean)
+	fmt.Printf("| %-40s | %-15s | %-12s | %-12s | %.2f\n", "RESULT", "MEAN", time.Since(startTime).String(), time.Since(func_time).String(), mean)
 }
 
 // Writes [][]string To CSV
@@ -193,7 +285,7 @@ func writeToCSV(data [][]string, fileName string, startTime time.Time) {
 	csvFile, err := os.Create(fileName)
 
 	if err != nil {
-		log.Fatalf("| %-25s | %-15s | %-12s | %-12s | %s\n", fileName, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "Error creating file"+fileName)
+		log.Fatalf("| %-35s | %-15s | %-12s | %-12s | %s\n", fileName, "ERROR", time.Since(startTime).String(), time.Since(func_time).String(), "Error creating file"+fileName)
 	}
 	csvwriter := csv.NewWriter(csvFile)
 
@@ -205,5 +297,5 @@ func writeToCSV(data [][]string, fileName string, startTime time.Time) {
 	}
 	csvwriter.Flush()
 	csvFile.Close()
-	fmt.Printf("| %-25s | %-15s | %-12s | %-12s | \n", fileName, "WRITING", time.Since(startTime).String(), time.Since(func_time).String())
+	fmt.Printf("| %-35s | %-15s | %-12s | %-12s | \n", fileName, "WRITING", time.Since(startTime).String(), time.Since(func_time).String())
 }
