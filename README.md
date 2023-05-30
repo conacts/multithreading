@@ -236,10 +236,10 @@ We receive a $44.37\%$ improvement using the concurrent file reading technique c
 $$\frac{12.97275ms - 8.985542ms}{8.985542ms} \cdot 100\% = 33.74\%$$
 
 ###### Concurrent Output: (Using local files)
-![[Pasted image 20230206002719.png]]
+![[assets/Pasted image 20230206002719.png]]
 
 ###### Nonconcurrent Output: (Using local files)
-![[Pasted image 20230206011617.png]]
+![[assets/Pasted image 20230206011617.png]]
 
 ## 5. Questions:
 
