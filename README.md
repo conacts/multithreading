@@ -233,7 +233,7 @@ We receive a $44.37\%$ improvement using the concurrent file reading technique c
 - Concurrent ~ $8.985542ms$
 - Nonconcurrent ~ $12.97275ms$
 
-$$\frac{12.97275ms - 8.985542ms}{8.985542ms} \cdot 100\% = 33.74\%$$
+$$\frac{12.97275ms - 8.985542ms}{8.985542ms} \cdot 100 = .35x$$
 
 ###### Concurrent Output: (Using local files)
 ![](assets/img1.png)
