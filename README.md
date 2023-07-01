@@ -228,7 +228,7 @@ func writeToCSV(data [][]string, fileName string) bool {
 ## Code Output:
 
 ##### Concurrent vs. Nonconcurrent
-We receive a $44.37\%$ improvement using the concurrent file reading technique compared to the nonconcurrent version.
+We receive a $35\%$ improvement using the concurrent file reading technique compared to the nonconcurrent version.
 
 - Concurrent ~ $8.985542ms$
 - Nonconcurrent ~ $12.97275ms$
