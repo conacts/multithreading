@@ -227,19 +227,34 @@ func writeToCSV(data [][]string, fileName string) bool {
 
 ## Code Output:
 
-##### Concurrent vs. Nonconcurrent
+##### Concurrent vs. Nonconcurrent with local files
 We receive a $35\%$ improvement using the concurrent file reading technique compared to the nonconcurrent version.
 
 - Concurrent ~ $8.985542ms$
 - Nonconcurrent ~ $12.97275ms$
 
-$$\frac{12.97275ms - 8.985542ms}{8.985542ms} \cdot 100 = .35x$$
+$$\frac{12.97275ms - 8.985542ms}{8.985542ms} \cdot 100 = 0.35x$$
 
 ###### Concurrent Output: (Using local files)
 ![](assets/img1.png)
 
 ###### Nonconcurrent Output: (Using local files)
 ![](assets/img2.png)
+
+##### Concurrent vs. Nonconcurrent with hosted files
+We receive a $43.4\%$ improvement using the concurrent file reading technique compared to the nonconcurrent version. The files were hosted on localhost.
+
+- Concurrent ~ $16.324334ms$
+- Nonconcurrent ~ $23.416167ms$
+
+$$\frac{23.416167ms - 16.324334ms}{16.324334ms} \cdot 100 = 0.434x$$
+
+###### Concurrent Output: (Using hosted files)
+![](assets/img4.png)
+
+###### Nonconcurrent Output: (Using hosted files)
+![](assets/img3.png)
+
 
 ## Questions:
 
