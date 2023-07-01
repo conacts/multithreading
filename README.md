@@ -1,4 +1,4 @@
-# crowdstrike-test
+# Multithreading in Golang
 
 ## Intro
 To run the project, we use the bash script `run.sh`. The questions to run the go file are shown below.
