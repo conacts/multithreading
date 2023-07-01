@@ -1,6 +1,6 @@
 # crowdstrike-test
 
-## 0. Intro
+## Intro
 To run the project, we use the bash script `run.sh`. The questions to run the go file are shown below.
 ```bash
 $ sh run.sh 
@@ -18,7 +18,7 @@ Here we host our files located in the `./data` directory using `python3 -m http.
 
 This solution was built for testing purposes and doesn't fully represent the potential of the program. 
 
-## 1. Dependencies:
+## Dependencies:
 All dependencies used in the program are in the golang standard library.
 
 ```go
@@ -36,9 +36,9 @@ import (
 )
 ```
 
-## 2. Functions:
+## Functions:
 
-### 2.1 runCSVJobs:
+### runCSVJobs:
 A job running tasks on a file sequentially. This includes:
 1. Validate input URL.
 2. Read input file.
@@ -59,7 +59,7 @@ func runCSVJobs(url string, ch chan [][]string, startTime time.Time, wg *sync.Wa
 ###### Return:
 - `[][]string` : Returns a sorted CSV.
 
-### 2.2 readCSVFile:
+### readCSVFile:
 Reads file to transform into CSV ([stack overflow](https://stackoverflow.com/questions/24999079/reading-csv-file-in-go)).
 ```go
 func readCsvFile(filePath string, startTime time.Time) ([][]string, bool) {
@@ -75,7 +75,7 @@ func readCsvFile(filePath string, startTime time.Time) ([][]string, bool) {
 - `[][]string` : CSV file.
 - `bool` : Used to see if file was able to be read.
 
-### 2.3 validateURL:
+### validateURL:
 Checks if URL given from the command line is able to be parsed of form `file://`.
 ```go
 func validateURL(filePath string, startTime time.Time) bool  {
@@ -92,7 +92,7 @@ Note: The portion of the function dealing with https is left blank.
 ###### Returns:
 - `bool` : states if URL is valid or not.
 
-### 2.4 cleanCSV:
+### cleanCSV:
 Iterates through each element in CSV (in form of  `[][]string`) to remove elements with empty parameters. This problem could also have been accomplished through replacing data missing the `age` parameter with the mean of the data.
 ```go
 func cleanCSV(csv [][]string, startTime time.Time, filePath string) [][]string {
@@ -108,7 +108,7 @@ func cleanCSV(csv [][]string, startTime time.Time, filePath string) [][]string {
 ###### Return:
 - `[][]string` : A CSV with all the rows containing empty cells removed.
 
-### 2.5 sortCSV:
+### sortCSV:
 Sorting CSV by age column.
 ```go 
 func sortCSV(csv [][]string, startTime time.Time, filePath string) [][]string {
@@ -124,7 +124,7 @@ func sortCSV(csv [][]string, startTime time.Time, filePath string) [][]string {
 ###### Returns:
 - `[][]string` : Sorted CSV.
 
-### 2.6 printStats:
+### printStats:
 Calls `printMedian(...)`  and `printMean(...)` functions concurrently.
 ```go
 func printStats(sortedCSV [][]string, startTime time.Time, wg *sync.WaitGroup) {
@@ -137,7 +137,7 @@ func printStats(sortedCSV [][]string, startTime time.Time, wg *sync.WaitGroup) {
 - `startTime` :  Used to measure function performance.
 - `wg` : Tool used to help time concurrency and wait till jobs are finished
 
-### 2.7 printMedian:
+### printMedian:
 Prints median value and person containing median age datapoint to terminal.
 ```go
 func printMedian(csv [][]string, startTime time.Time, wg *sync.WaitGroup) {
@@ -150,7 +150,7 @@ func printMedian(csv [][]string, startTime time.Time, wg *sync.WaitGroup) {
 - `startTime` :  Used to measure function performance.
 - `wg` : Tool used to help time concurrency and wait till jobs are finished
 
-### 2.8 printMean:
+### printMean:
 Prints mean to terminal.
 ```go 
 func printMean(csv [][]string, startTime time.Time, wg *sync.WaitGroup) {
@@ -163,7 +163,7 @@ func printMean(csv [][]string, startTime time.Time, wg *sync.WaitGroup) {
 - `startTime` :  Used to measure function performance.
 - `wg` : Tool used to help time concurrency and wait till jobs are finished
 
-### 2.9 downloadCSV
+### downloadCSV
 Downloads CSV from given url and stores it to filePath.
 ```go
 func downloadCSV(url string, filePath string, startTime time.Time) bool {
@@ -179,7 +179,7 @@ func downloadCSV(url string, filePath string, startTime time.Time) bool {
 ###### Returns:
 - `bool` : dictates whether CSV was downloaded or not
 
-### 2.10 hashFilePath
+### hashFilePath
 A hashing function that takes in downloaded file name and current time to create a unique hash to prevent collisions.
 
 ```go
@@ -195,7 +195,7 @@ func hashFilePath(filePath string) string {
 - `string` : Unique file name
 
 
-### 2.11 writeToFile:
+### writeToFile:
 A function to write bytes to a given file.
 ```go
 func writeFile(data []byte, fileName string) bool {
@@ -210,7 +210,7 @@ func writeFile(data []byte, fileName string) bool {
 ###### Returns: 
 - `bool` : Output whether write to file was successful or not
 
-### 2.12 writeToCSV:
+### writeToCSV:
 Writes cleaned, sorted and merged CSV to new file. Has fatal error if unable to write to file.
 ```go
 func writeToCSV(data [][]string, fileName string) bool {
@@ -225,7 +225,7 @@ func writeToCSV(data [][]string, fileName string) bool {
 ###### Return:
 - `bool` : dictates whether saved to file or not.
 
-## 3. Code Output:
+## Code Output:
 
 ##### Concurrent vs. Nonconcurrent
 We receive a $44.37\%$ improvement using the concurrent file reading technique compared to the nonconcurrent version.
@@ -241,14 +241,14 @@ $$\frac{12.97275ms - 8.985542ms}{8.985542ms} \cdot 100\% = 33.74\%$$
 ###### Nonconcurrent Output: (Using local files)
 ![](assets/img2.png)
 
-## 5. Questions:
+## Questions:
 
 ##### What assumptions did you make in your design? Why?
 - Only one machine is present to read files. The addition of more machines could enable separate machines to work on files independently.
+- I assumed that if we were pulling over HTTP, we would be able to receive the file at each request without error. 
 - I assumed that the machine had at least enough threads to support all the input files all at once.
 - I assumed the machine had at least enough memory to handle all the files it was working on.
 - I assumed that the CSVs being read are not always gonna be formatted properly and every input file needs to be checked.
-- I assumed that if we were pulling over HTTP, we would be able to receive the file at each request. 
 
 
 ##### How would you change your program if it had to process many files where each file was over 10M records?
