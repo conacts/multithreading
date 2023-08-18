@@ -12,5 +12,8 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Build
-        run: go build -v ./...
+      - name: Build Non-concurrent
+        run: go build -v nonconcurrent.go
+
+      - name: Build Concurrent
+        run: go build -v concurrent.go
